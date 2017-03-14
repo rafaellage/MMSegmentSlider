@@ -1,7 +1,7 @@
 #import "MMSegmentSlider.h"
-
+IB_DESIGNABLE
 static CGFloat const HorizontalInsets = 15.0f;
-static CGFloat const BottomOffset = 15.0f;
+static CGFloat const BottomOffset = 20.0f;
 
 @interface MMSegmentSlider ()
 
@@ -69,7 +69,7 @@ static CGFloat const BottomOffset = 15.0f;
     _labelColor = [UIColor grayColor];
     
     _textOffset = 30.0f;
-    _circlesRadius = 15.0f;
+    _circlesRadius = 10.0f;
     
     _selectedItemIndex = 0;
     _values = @[@0, @1, @2];
@@ -83,13 +83,18 @@ static CGFloat const BottomOffset = 15.0f;
 - (void)setupLayers
 {
     self.sliderLayer = [CAShapeLayer layer];
-    self.sliderLayer.lineWidth = 3.0f;
+    self.sliderLayer.lineWidth = 4.0f;
     [self.layer addSublayer:self.sliderLayer];
     
     self.circlesLayer = [CAShapeLayer layer];
     [self.layer addSublayer:self.circlesLayer];
     
     self.selectedLayer = [CAShapeLayer layer];
+    
+    
+    
+    
+    
     [self.layer addSublayer:self.selectedLayer];
 }
 
@@ -99,10 +104,20 @@ static CGFloat const BottomOffset = 15.0f;
     self.sliderLayer.path = [[self pathForSlider] CGPath];
     
     self.circlesLayer.fillColor = self.basicColor.CGColor;
-    self.circlesLayer.path = [[self pathForCircles] CGPath];
+    self.circlesLayer.path = [[self pathForUnselectedCircles] CGPath];
+    
+    
     
     self.selectedLayer.fillColor = self.selectedValueColor.CGColor;
     self.selectedLayer.path = [[self pathForSelected] CGPath];
+    
+    self.selectedLayer.cornerRadius = 10.0;
+    
+    self.selectedLayer.shadowColor =  [[UIColor blackColor] CGColor];
+    
+    self.selectedLayer.shadowOffset = CGSizeMake(1.0, 1.0);
+    self.selectedLayer.shadowOpacity =  0.3;
+    self.selectedLayer.shadowPath =  [[self pathForSelected] CGPath];
 }
 
 - (void)animateSelectionChange
@@ -115,9 +130,19 @@ static CGFloat const BottomOffset = 15.0f;
     pathAnimation.toValue = (__bridge id) newPath;
     pathAnimation.duration = 0.25f;
     pathAnimation.timingFunction = [CAMediaTimingFunction functionWithControlPoints:0.20 :1.00 :0.70 :1.00];
-
+    
     self.selectedLayer.path = newPath;
+    
+    CABasicAnimation *shadowPathAnimation = [CABasicAnimation animationWithKeyPath:@"shadow"];
+    shadowPathAnimation.fromValue = (__bridge id) oldPath;
+    shadowPathAnimation.toValue = (__bridge id) newPath;
+    shadowPathAnimation.duration = 0.25f;
+    shadowPathAnimation.timingFunction = [CAMediaTimingFunction functionWithControlPoints:0.20 :1.00 :0.70 :1.00];
+    
+    self.selectedLayer.shadowPath = newPath;
+    
     [self.selectedLayer addAnimation:pathAnimation forKey:@"PathAnimation"];
+    [self.selectedLayer addAnimation:pathAnimation forKey:@"ShadowAnimation"];
 }
 
 - (UIBezierPath *)pathForSlider
@@ -125,8 +150,8 @@ static CGFloat const BottomOffset = 15.0f;
     UIBezierPath *path = [UIBezierPath bezierPath];
     
     CGFloat lineY = self.bounds.size.height - self.circlesRadius - BottomOffset;
-    [path moveToPoint:CGPointMake(self.circlesRadius + HorizontalInsets, lineY)];
-    [path addLineToPoint:CGPointMake(self.bounds.size.width - self.circlesRadius - HorizontalInsets, lineY)];
+    [path moveToPoint:CGPointMake(self.circlesRadius /*+ HorizontalInsets/2*/, lineY)];
+    [path addLineToPoint:CGPointMake(self.bounds.size.width /*- self.circlesRadius*/ - HorizontalInsets/2, lineY )];
     [path closePath];
     
     return path;
@@ -153,10 +178,31 @@ static CGFloat const BottomOffset = 15.0f;
     return path;
 }
 
+- (UIBezierPath *)pathForUnselectedCircles
+{
+    UIBezierPath *path = [UIBezierPath bezierPath];
+    
+    CGFloat startPointX = self.circlesRadius + HorizontalInsets;
+    CGFloat intervalSize = (self.bounds.size.width - (self.circlesRadius + HorizontalInsets) * 2.0) / (self.values.count - 1);
+    CGFloat yPos = self.bounds.size.height - self.circlesRadius - BottomOffset;
+    
+    for (int i = 0; i < self.values.count; i++) {
+        CGPoint center = CGPointMake(startPointX + i * intervalSize, yPos);
+        [path addArcWithCenter:center
+                        radius:5
+                    startAngle:0
+                      endAngle:2 * M_PI
+                     clockwise:YES];
+        [path closePath];
+    }
+    
+    return path;
+}
+
 - (UIBezierPath *)pathForSelected
 {
     UIBezierPath *path = [UIBezierPath bezierPath];
-
+    
     CGFloat startPointX = self.bounds.origin.x + self.circlesRadius + HorizontalInsets;
     CGFloat intervalSize = (self.bounds.size.width - (self.circlesRadius + HorizontalInsets) * 2.0) / (self.values.count - 1);
     CGFloat yPos = self.bounds.origin.y + self.bounds.size.height - self.circlesRadius - BottomOffset;
@@ -181,6 +227,12 @@ static CGFloat const BottomOffset = 15.0f;
 
 - (void)drawLabels
 {
+    for (UIView *subView in self.subviews) {
+        if ([subView isKindOfClass:UILabel.class]) {
+            [subView removeFromSuperview];
+        }
+    }
+    
     CGFloat startPointX = self.bounds.origin.x + self.circlesRadius + HorizontalInsets;
     CGFloat intervalSize = (self.bounds.size.width - (self.circlesRadius + HorizontalInsets) * 2.0) / (self.values.count - 1);
     
@@ -197,14 +249,17 @@ static CGFloat const BottomOffset = 15.0f;
 
 - (void)drawLabel:(NSString*)label atPoint:(CGPoint)point withColor:(UIColor*)color
 {
-    NSMutableParagraphStyle* textStyle = [[NSMutableParagraphStyle defaultParagraphStyle] mutableCopy];
-    textStyle.alignment = NSTextAlignmentCenter;
-    [label drawInRect:CGRectMake(point.x - 30, point.y - 10, 60, 20)
-       withAttributes:@{
-                        NSFontAttributeName: self.labelsFont,
-                        NSForegroundColorAttributeName: color,
-                        NSParagraphStyleAttributeName: textStyle
-                        }];
+    CGPoint center = CGPointMake(point.x, point.y+10);
+    
+    UILabel *textLabel = [[UILabel alloc] initWithFrame:CGRectMake(point.x - 30, point.y - 30, 60, 60)];
+    [textLabel setNumberOfLines:0];
+    [textLabel setFont:self.labelsFont];
+    [textLabel setTextColor:color];
+    textLabel.text = label;
+    [textLabel sizeToFit];
+    [textLabel setTextAlignment:NSTextAlignmentCenter];
+    [textLabel setCenter:center];
+    [self addSubview:textLabel];
 }
 
 #pragma mark - Touch handlers
@@ -231,7 +286,7 @@ static CGFloat const BottomOffset = 15.0f;
     
     NSInteger index = [self indexForTouchPoint:location];
     BOOL canSwitch = index >= 0 && index < self.values.count && index != self.selectedItemIndex;
-
+    
     if (canSwitch) {
         [self setSelectedItemIndex:index animated:YES];
         [self sendActionsForControlEvents:UIControlEventValueChanged];
@@ -261,7 +316,7 @@ static CGFloat const BottomOffset = 15.0f;
 {
     _values = values;
     self.selectedItemIndex = 0;
-
+    
     [self setNeedsDisplay];
     [self setNeedsLayout];
 }
